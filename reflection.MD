@@ -1,4 +1,4 @@
-# CI pipeline: answers, reflection, and evidence
+# CI pipeline: answers and reflection
 
 ## Task 1: integration test stage
 
@@ -20,9 +20,11 @@ With the default success condition, a failed dependency prevents `package` from 
 
 Testcontainers starts PostgreSQL from the Java tests using the runner's Docker daemon. In `AbstractPostgreSQLIntegrationTest`, `@Container` manages its lifecycle and `@DynamicPropertySource` supplies the generated JDBC URL and credentials to Spring. A workflow `services:` block instead starts a container before test execution, with connection settings supplied through workflow configuration. GitHub-hosted Ubuntu runners provide Docker, so these tests need no additional PostgreSQL service.
 
+Evidence: [integration error](task-1.png), [failed graph with packaging skipped](task-1-graph.png), and [corrected green pipeline](task-1-fixed-green.png).
+
 ## Task 2: matrix and caching
 
-The frontend builds on Node 20 and Node 22. Each matrix entry uploads a different artifact: `frontend-dist-node20` or `frontend-dist-node22`. `fail-fast: false` allows the other matrix entry to finish when one fails; the overall matrix still fails if either entry fails.
+The frontend builds on Node 20 and Node 22. Each matrix entry uploads a different artifact: `frontend-dist-node20` or `frontend-dist-node22`. `fail-fast: false` allows the other matrix entry to finish when one fails; the overall matrix still fails if either entry fails. The [matrix screenshot](task-2.png) shows Node 20 failing while Node 22 succeeds.
 
 The Maven cache key contains the action prefix, runner OS, architecture, Maven identifier, and a hash of dependency configuration. With the defaults used here, setup-java v6 hashes `pom.xml` files and supported Maven wrapper/extension configuration. The npm key contains the action prefix, OS, architecture, npm identifier, and the hash of `frontend/package-lock.json` (or `e2e/package-lock.json` in E2E). The Node version is not part of this npm key; the action caches package downloads, not `node_modules`.
 
@@ -32,19 +34,16 @@ Sources: [setup-java cache implementation](https://github.com/actions/setup-java
 
 ### Cache measurements
 
-Compare the same workflow, commit, job, and step across attempts. Confirm a cache miss/hit in the setup step logs. Report cache restoration separately from dependency installation: setup-java restores Maven's cache, but the Maven test step also compiles and tests. Its total time is not a pure dependency-download measurement.
+Both attempts use [CI run 41990661408](https://github.com/mikhail2574/student-news/actions/runs/41990661408), on the same commit: attempt 1 has cache misses and attempt 2 has exact-key hits. The cold cache came from a new PR cache scope.
 
-| Measurement | Cold attempt | Warm attempt | Saving |
+| Dependency step | Cold | Warm | Saving |
 | --- | --- | --- | --- |
-| Maven dependency resolution (dedicated step required for a pure measurement) | Pending | Pending | Pending |
-| Backend: Run unit tests (downloads, compilation, and tests combined) | 20.477 s | 10.251 s | 10.226 s |
-| Frontend Node 22: Install dependencies (`npm ci`) | 2.684 s | 2.071 s | 0.613 s |
+| Maven `dependency:go-offline`, full step | 19.765 s | 11.843 s | 7.922 s |
+| Node 22 `npm ci`, full step | 2.829 s | 2.152 s | 0.677 s |
 
-These are elapsed times between the step's first log group and the next step's first log group, rounded to milliseconds, not exact runner step metadata. Both are from CI run 41988188831: cold attempt 1 and warm attempt 2, on the same commit. Maven's own reported execution time was 14.605 s cold and 5.477 s warm (9.128 s less), excluding command startup. Both cold setup logs explicitly say the dependency cache was not found; both warm logs show an exact-key cache hit.
+Full-step times are approximated from log timestamps and include command startup. Maven's internal timer reports 15.327 s versus 5.817 s, saving 9.510 s. GitHub rounds the visible step labels to 20/12 s for Maven and 2/2 s for npm.
 
-Screenshot sources: [cold Maven job](https://github.com/mikhail2574/student-news/actions/runs/41988188831/job/127113838069), [warm Maven job](https://github.com/mikhail2574/student-news/actions/runs/41988188831/job/127116834018), [cold Node 22 job](https://github.com/mikhail2574/student-news/actions/runs/41988188831/job/127113838213), [warm Node 22 job](https://github.com/mikhail2574/student-news/actions/runs/41988188831/job/127116833738). Expand setup and installation/test steps to show both the cache state and timing. A separate Maven dependency-only measurement is still required to distinguish downloads from compilation/testing.
-
-Saving in seconds = cold duration minus warm duration. Do not substitute durations from different workflows or Node versions.
+Evidence: [Maven cold](task-2-maven-cold.png), [Maven warm](task-2-maven-warm.png), [npm cold](task-2-npm-cold.png), [npm warm](task-2-npm-warm.png).
 
 ## Task 3: selective E2E runs
 
@@ -52,13 +51,13 @@ Both `push` and `pull_request` triggers in `e2e.yml` ignore `**.md` and `docs/**
 
 Skipping would be wrong if documentation files became executable inputs, such as configuration snippets consumed by a build or test. Keep exclusions limited to inert documentation, review them when file usage changes, and add a scheduled or manually triggered full E2E run as a backstop. The current workflow does not yet implement that additional backstop.
 
-For the demonstration, use separate PRs based on a branch that already contains the workflow changes. A README-only commit added to a PR that also changes workflows is insufficient: pull-request path filtering considers the PR's complete diff. Feature branches do not trigger the current push workflow, which only targets main/master; PRs targeting main can demonstrate both filters without pushing demonstration changes to main.
+[PR #4](https://github.com/mikhail2574/student-news/pull/4) changed only README.md: [CI ran and E2E did not](task-3-readme-only.png). [PR #5](https://github.com/mikhail2574/student-news/pull/5) changed a Java comment under backend/: [both workflows ran](task-3-backend.png). These demonstrations exercise pull-request events; both workflow triggers contain the path filters.
 
 ## Task 4: branch protection
 
 `CI status` provides one stable required check for branch protection. Its dependencies and result inspection live with the workflow, so adding a job does not require manually updating a long list of required checks in repository settings. The aggregate job must include every mandatory stage and must reject non-success results.
 
-Configure an active rule targeting `main`, require status checks before merging, and select the exact check name `CI status`. A disabled merge button on a draft PR is not evidence of status-check enforcement: use a non-draft PR with failing CI and show the required-check explanation.
+The rule for `main` requires `CI status`. The [non-draft PR screenshot](task-2.png) shows the failed required check and disabled merge button.
 
 ## Reflection (200 words)
 
@@ -71,21 +70,3 @@ The deployment job must authenticate to a real environment and update its worklo
 Readiness checks, rollout monitoring, and smoke tests must replace printed placeholders. Weak checks could direct traffic to an unhealthy release. Automatic rollback needs procedures and compatible application and database versions.
 
 With these capabilities and a manual production approval, the project could offer Continuous Delivery. Removing that approval and automatically releasing every change would establish Continuous Deployment, increasing exposure to undetected defects.
-
-## Evidence checklist
-
-- Demonstration PR: [PR #2, intentional failures; do not merge](https://github.com/mikhail2574/student-news/pull/2).
-- Matrix failure demonstration: [CI run 41989093472](https://github.com/mikhail2574/student-news/actions/runs/41989093472). Node 20 failed deliberately while Node 22 passed, backend unit tests passed, and the integration test step failed.
-
-- [x] Baseline CI passed: [run 41988188831](https://github.com/mikhail2574/student-news/actions/runs/41988188831).
-- [x] Baseline E2E passed: [run 41988188726](https://github.com/mikhail2574/student-news/actions/runs/41988188726).
-- [ ] Integration failure log with the database-layer error, while unit tests pass.
-- [ ] Failed run graph showing skipped packaging, with the `needs` explanation above.
-- [ ] Node 20 fails deliberately while Node 22 completes successfully.
-- [ ] Protected, non-draft PR shows merging blocked by required `CI status`.
-- [ ] Corrected demonstration PR has a green pipeline.
-- [ ] Cold and warm cache logs, matching step durations, and calculated savings.
-- [ ] README-only PR: CI runs and E2E does not.
-- [ ] Backend-change PR: both CI and E2E run.
-
-Screenshots and unfinished measurements must be added from actual GitHub runs; this checklist does not claim they have already been collected.
