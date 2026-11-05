@@ -37,7 +37,12 @@ Compare the same workflow, commit, job, and step across attempts. Confirm a cach
 | Measurement | Cold attempt | Warm attempt | Saving |
 | --- | --- | --- | --- |
 | Maven dependency resolution (dedicated step required for a pure measurement) | Pending | Pending | Pending |
-| Frontend Node 22: Install dependencies (`npm ci`) | Pending | Pending | Pending |
+| Backend: Run unit tests (downloads, compilation, and tests combined) | 20.477 s | 10.251 s | 10.226 s |
+| Frontend Node 22: Install dependencies (`npm ci`) | 2.684 s | 2.071 s | 0.613 s |
+
+These are elapsed times between the step's first log group and the next step's first log group, rounded to milliseconds, not exact runner step metadata. Both are from CI run 41988188831: cold attempt 1 and warm attempt 2, on the same commit. Maven's own reported execution time was 14.605 s cold and 5.477 s warm (9.128 s less), excluding command startup. Both cold setup logs explicitly say the dependency cache was not found; both warm logs show an exact-key cache hit.
+
+Screenshot sources: [cold Maven job](https://github.com/mikhail2574/student-news/actions/runs/41988188831/job/127113838069), [warm Maven job](https://github.com/mikhail2574/student-news/actions/runs/41988188831/job/127116834018), [cold Node 22 job](https://github.com/mikhail2574/student-news/actions/runs/41988188831/job/127113838213), [warm Node 22 job](https://github.com/mikhail2574/student-news/actions/runs/41988188831/job/127116833738). Expand setup and installation/test steps to show both the cache state and timing. A separate Maven dependency-only measurement is still required to distinguish downloads from compilation/testing.
 
 Saving in seconds = cold duration minus warm duration. Do not substitute durations from different workflows or Node versions.
 
@@ -68,6 +73,9 @@ Readiness checks, rollout monitoring, and smoke tests must replace printed place
 With these capabilities and a manual production approval, the project could offer Continuous Delivery. Removing that approval and automatically releasing every change would establish Continuous Deployment, increasing exposure to undetected defects.
 
 ## Evidence checklist
+
+- Demonstration PR: [PR #2, intentional failures; do not merge](https://github.com/mikhail2574/student-news/pull/2).
+- Matrix failure demonstration: [CI run 41989093472](https://github.com/mikhail2574/student-news/actions/runs/41989093472). Node 20 failed deliberately while Node 22 passed, backend unit tests passed, and the integration test step failed.
 
 - [x] Baseline CI passed: [run 41988188831](https://github.com/mikhail2574/student-news/actions/runs/41988188831).
 - [x] Baseline E2E passed: [run 41988188726](https://github.com/mikhail2574/student-news/actions/runs/41988188726).
