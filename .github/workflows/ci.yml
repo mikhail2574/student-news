@@ -53,6 +53,11 @@ jobs:
           distribution: temurin
           cache: maven            # without this, Maven re-downloads the world every run
 
+      # Resolve dependencies separately so cold/warm cache timings exclude tests.
+      - name: Resolve Maven dependencies
+        working-directory: backend
+        run: mvn -B dependency:go-offline
+
       # -B is batch mode (no colour codes in the log) and surefire runs the unit
       # tests only. Database tests run in the integration-test job below.
       - name: Run unit tests
