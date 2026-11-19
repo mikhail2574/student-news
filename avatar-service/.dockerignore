@@ -1,0 +1,14 @@
+# The image is built from pom.xml and src/ only.
+# Build output: rebuilt inside the image anyway.
+target/
+# Local uploads from running the service outside Docker.
+data/
+# IDE files.
+.idea/
+.vscode/
+*.iml
+# Logs.
+logs/
+*.log
+# Version control.
+.git

@@ -172,13 +172,13 @@ jobs:
   # spending minutes building images for code whose tests already failed.
   package:
     name: Package · container images
-    needs: [frontend-lint, backend-test, backend-integration-test, frontend-build]
+    needs: [frontend-lint, backend-test, backend-integration-test, frontend-build, avatar-service-test]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        service: [backend, frontend]
+        service: [backend, frontend, avatar-service]
     steps:
       - uses: actions/checkout@v7
 
